@@ -3004,23 +3004,5 @@ document.addEventListener("mousedown",function(e){
   }
 })();
 </script>
-
-
-<script id="mr-original-login-prefill">
-(function(){
-  function setOriginalLoginEmail(){
-    var input=document.getElementById("loginEmail");
-    if(input && !input.value){
-      input.value="mrbeautyvlora@hotmail.com";
-    }
-  }
-  if(document.readyState==="loading"){
-    document.addEventListener("DOMContentLoaded",setOriginalLoginEmail,{once:true});
-  }else{
-    setOriginalLoginEmail();
-  }
-})();
-</script>
-
 </body>
 </html>

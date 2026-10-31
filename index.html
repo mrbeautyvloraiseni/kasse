@@ -2243,23 +2243,28 @@ try{
 }
 }
 
+function escapeReceiptField(value){
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  })[char]);
+}
 function receiptHtml(data){
-let items=data.items.map(i=>`<div class="receiptItem"><div>• ${i.name}</div><div class="currency">CHF</div><div class="amount">${i.price.toFixed(2)}</div></div>`).join("");
+let items=data.items.map(i=>`<div class="receiptItem"><div>• ${escapeReceiptField(i.name)}</div><div class="currency">CHF</div><div class="amount">${i.price.toFixed(2)}</div></div>`).join("");
 return `<img src="logo_quittung.png" class="receiptLogo">
 <div class="receiptCompany"><div>MR Beauty Vlora Iseni</div><div>Adlikerstrasse 255 | 8105 Regensdorf</div></div>
 <div class="receiptDash"></div>
 <div class="receiptTitle">QUITTUNG</div>
 <div class="receiptMeta">
-  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Quittung Nr.:</div><div class="receiptMetaValue">${data.number}</div></div>
-  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Datum:</div><div class="receiptMetaValue">${data.date}</div></div>
-  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Kundin:</div><div class="receiptMetaValue">${(data.name||"").length>30?(data.name||"").slice(0,30)+"…":data.name}</div></div>
-  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Uhrzeit:</div><div class="receiptMetaValue">${data.time}</div></div>
+  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Quittung Nr.:</div><div class="receiptMetaValue">${escapeReceiptField(data.number)}</div></div>
+  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Datum:</div><div class="receiptMetaValue">${escapeReceiptField(data.date)}</div></div>
+  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Kundin:</div><div class="receiptMetaValue">${escapeReceiptField((data.name||"").length>30?(data.name||"").slice(0,30)+"…":data.name)}</div></div>
+  <div class="receiptMetaGroup"><div class="receiptMetaLabel">Uhrzeit:</div><div class="receiptMetaValue">${escapeReceiptField(data.time)}</div></div>
 </div>
 <div class="receiptLine"></div>
 <div class="receiptItems"><b>Leistungen</b>${items}</div>
 <div class="receiptLine"></div>
 <div class="receiptTotalRow"><span>Betrag:</span><span class="currency">CHF</span><span class="amount">${data.total.toFixed(2)}</span></div>
-<div class="receiptPayRow"><span>Zahlungsart:</span><span>${data.payment}</span></div>
+<div class="receiptPayRow"><span>Zahlungsart:</span><span>${escapeReceiptField(data.payment)}</span></div>
 <div class="receiptMwst">Nicht MWST-pflichtig</div>
 <div class="receiptLine"></div>
 <div class="receiptThanks"><img src="herz.png" class="receiptHeartImg" alt=""><div class="receiptThanksText"><span style="color:#C8CF04;; font-size:24px">Vielen Dank für Ihren Besuch!</span></div><div class="receiptThanksSub">Wir freuen uns, Sie bald wieder begrüssen zu dürfen.</div></div>`;
@@ -2713,6 +2718,24 @@ try{
   if(okBtn){ okBtn.disabled=false; okBtn.textContent="OK"; }
 }
 }
+let localReceiptQrPromise;
+function loadLocalReceiptQrGenerator(){
+  if(typeof qrcode==="function")return Promise.resolve();
+  if(localReceiptQrPromise)return localReceiptQrPromise;
+  localReceiptQrPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src="qrcode-generator.js";
+    script.async=true;
+    script.onload=()=>{
+      if(typeof qrcode==="function")resolve();
+      else reject(new Error("QR-Bibliothek nicht verfügbar"));
+    };
+    script.onerror=()=>reject(new Error("QR-Bibliothek konnte nicht geladen werden"));
+    document.head.appendChild(script);
+  }).catch(error=>{localReceiptQrPromise=null;throw error});
+  return localReceiptQrPromise;
+}
+
 async function openQrDialog(){
 const data=currentReceiptData || getReceiptData();
 const token=ensureReceiptToken(data);
@@ -2736,9 +2759,18 @@ try{
   alert("QR-Link konnte nicht gespeichert werden. Bitte Firebase-Regeln prüfen.");
   return;
 }
-let url=encodeURIComponent(rawUrl);
-document.getElementById("receiptQr").src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data="+url;
-document.getElementById("qrDialog").classList.add("show");
+try{
+  await loadLocalReceiptQrGenerator();
+  const qr=qrcode(0,"M");
+  qr.addData(rawUrl);
+  qr.make();
+  // Data-URL bleibt lokal im Browser; der Beleglink wird nicht an Dritte gesendet.
+  document.getElementById("receiptQr").src=qr.createDataURL(5,20);
+  document.getElementById("qrDialog").classList.add("show");
+}catch(error){
+  console.error("Lokaler Quittungs-QR-Code konnte nicht erstellt werden:",error);
+  alert("QR-Code konnte nicht erstellt werden. Bitte die Seite erneut laden.");
+}
 }
 function closeQrDialog(){document.getElementById("qrDialog").classList.remove("show");}
 
